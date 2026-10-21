@@ -37,6 +37,28 @@ ARQUIVOS = ["live.json", "historico.json", "historico-clausula.json", "status.js
 # 2o turno (update.py --turno 2): arquivos proprios, o 1o turno fica como esta
 ARQUIVOS_2T = ["live-2t.json", "historico-2t.json", "status.json"]
 
+def _obter_token_github():
+    """Obtem token de acesso do GitHub via CLI (gh auth token) ou ambiente."""
+    import subprocess
+    try:
+        r = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=10)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+    except Exception:
+        pass
+    # Fallback: tenta variavel de ambiente
+    return os.environ.get("GITHUB_TOKEN", "")
+
+def _url_com_token(url, token):
+    """Adiciona token ao URL do git para autenticacao HTTP basica do GitHub."""
+    if not url or not token:
+        return url
+    # Substituicao segura: https://github.com/... -> https://TOKEN@github.com/...
+    if url.startswith("https://github.com/"):
+        return url.replace("https://github.com/", "https://" + token + "@github.com/")
+    return url
+
+
 
 class NaoConfigurado(Exception):
     """dados_publicos/ ainda nao foi clonado - ver instrucoes no topo deste arquivo."""
@@ -143,7 +165,10 @@ def configurar():
     if configurado():
         print("%s ja existe - nada a fazer." % os.path.relpath(DADOS_DIR, HERE))
         return 0
-    r = subprocess.run(["git", "clone", url, DADOS_DIR], cwd=HERE, capture_output=True, text=True,
+    # Injeta token do GitHub na URL para autenticacao do clone
+    token = _obter_token_github()
+    url_com_token = _url_com_token(url, token)
+    r = subprocess.run(["git", "clone", url_com_token, DADOS_DIR], cwd=HERE, capture_output=True, text=True,
                        encoding="utf-8", errors="replace")
     print((r.stdout or "") + (r.stderr or ""))
     if r.returncode != 0:
